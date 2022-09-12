@@ -10,6 +10,7 @@ use esp32c3_hal::{
     timer::TimerGroup, Delay, Rtc,
 };
 use esp_backtrace as _;
+use esp_println::println;
 use riscv_rt::entry;
 
 #[entry]
@@ -31,8 +32,12 @@ fn main() -> ! {
     wdt0.disable();
     wdt1.disable();
 
-    // Set GPIO5 as an output, and set its state high initially.
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+
+    // Use println!() macro for serial debug messages:
+    println!("Debug serial printing is now operational.");
+
+    // Set GPIO5 as an output, and set its state high initially.
     let mut led = io.pins.gpio8.into_push_pull_output();
 
     led.set_high().unwrap();
