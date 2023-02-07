@@ -1,21 +1,21 @@
 //! Blinks an LED
 //!
-//! This assumes that a LED is connected to the pin assigned to `led`. (GPIO5)
+//! This assumes that a LED is connected to the pin assigned to `led`.
 
 #![no_std]
 #![no_main]
 
 use esp32c3_hal::{
-    clock::ClockControl, gpio::IO, pac::Peripherals, prelude::*, system::SystemExt,
+    clock::ClockControl, gpio::IO, peripherals::Peripherals, prelude::*, system::SystemExt,
     timer::TimerGroup, Delay, Rtc,
 };
 use esp_backtrace as _;
 use esp_println::println;
-use riscv_rt::entry;
+use esp_riscv_rt::entry;
 
 #[entry]
 fn main() -> ! {
-    let peripherals = Peripherals::take().unwrap();
+    let peripherals = Peripherals::take();
     let system = peripherals.SYSTEM.split();
     let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
 
@@ -38,7 +38,7 @@ fn main() -> ! {
     println!("Debug serial printing is now operational.");
 
     // Set GPIO5 as an output, and set its state high initially.
-    let mut led = io.pins.gpio8.into_push_pull_output();
+    let mut led = io.pins.gpio5.into_push_pull_output();
 
     led.set_high().unwrap();
 

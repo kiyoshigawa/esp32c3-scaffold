@@ -1,5 +1,4 @@
-ENTRY(_start_hal)
-PROVIDE(_start_trap = _start_trap_hal);
+ENTRY(_start)
 
 PROVIDE(_stext = ORIGIN(REGION_TEXT));
 PROVIDE(_stack_start = ORIGIN(REGION_STACK) + LENGTH(REGION_STACK));
@@ -37,6 +36,12 @@ PROVIDE(_setup_interrupts = default_setup_interrupts);
 */
 PROVIDE(_mp_hook = default_mp_hook);
 
+/* # Start trap function override
+  By default uses the riscv crates default trap handler
+  but by providing the `_start_trap` symbol external crates can override.
+*/
+PROVIDE(_start_trap = default_start_trap);
+
 SECTIONS
 {
   .text.dummy (NOLOAD) :
@@ -51,6 +56,7 @@ SECTIONS
     /* point of the program. */
     KEEP(*(.init));
     KEEP(*(.init.rust));
+    KEEP(*(.text.abort));
     . = ALIGN(4);
     KEEP(*(.trap));
     KEEP(*(.trap.rust));
@@ -110,6 +116,16 @@ SECTIONS
     _ebss = .;
   } > REGION_BSS
 
+  /* ### .uninit */
+  .uninit (NOLOAD) : ALIGN(4)
+  {
+    . = ALIGN(4);
+    __suninit = .;
+    *(.uninit .uninit.*);
+    . = ALIGN(4);
+    __euninit = .;
+  } > REGION_BSS
+
   /* fictitious region that represents the memory available for the heap */
   .heap (NOLOAD) :
   {
@@ -135,7 +151,7 @@ SECTIONS
   } > REGION_RTC_FAST
   _fast_text_size = _ertc_fast_text - _srtc_fast_text + 8;
 
-  .rtc_fast.data : AT(_text_size + _rodata_size + _data_size + _rwtext_size + _fast_text_size) 
+  .rtc_fast.data : AT(_text_size + _rodata_size + _data_size + _rwtext_size + _fast_text_size)
   {
     _rtc_fast_data_start = ABSOLUTE(.);
     *(.rtc_fast.data .rtc_fast.data.*)
@@ -144,7 +160,7 @@ SECTIONS
   } > REGION_RTC_FAST
   _rtc_fast_data_size = _rtc_fast_data_end - _rtc_fast_data_start + 8;
 
- .rtc_fast.bss (NOLOAD) : ALIGN(4) 
+ .rtc_fast.bss (NOLOAD) : ALIGN(4)
   {
     _rtc_fast_bss_start = ABSOLUTE(.);
     *(.rtc_fast.bss .rtc_fast.bss.*)
@@ -152,7 +168,7 @@ SECTIONS
     _rtc_fast_bss_end = ABSOLUTE(.);
   } > REGION_RTC_FAST
 
- .rtc_fast.noinit (NOLOAD) : ALIGN(4) 
+ .rtc_fast.noinit (NOLOAD) : ALIGN(4)
   {
     *(.rtc_fast.noinit .rtc_fast.noinit.*)
   } > REGION_RTC_FAST

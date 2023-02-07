@@ -1,6 +1,5 @@
 ENTRY(_start)
 
-PROVIDE(_stext = ORIGIN(REGION_TEXT));
 PROVIDE(_stack_start = ORIGIN(REGION_STACK) + LENGTH(REGION_STACK));
 PROVIDE(_max_hart_id = 0);
 PROVIDE(_hart_stack_size = 2K);
@@ -44,46 +43,13 @@ PROVIDE(_start_trap = default_start_trap);
 
 SECTIONS
 {
-  .text.dummy (NOLOAD) :
-  {
-    /* This section is intended to make _stext address work */
-    . = ABSOLUTE(_stext);
-  } > REGION_TEXT
-
-  .text _stext :
-  {
-    _stext = .;
-    /* Put reset handler first in .text section so it ends up as the entry */
-    /* point of the program. */
-    KEEP(*(.init));
-    KEEP(*(.init.rust));
-    KEEP(*(.text.abort));
-    . = ALIGN(4);
-    KEEP(*(.trap));
-    KEEP(*(.trap.rust));
-
-    *(.text .text.*);
-    _etext = .;
-  } > REGION_TEXT
-
-  /**
-   * This dummy section represents the .text section but in rodata.
-   * Thus, it must have its alignement and (at least) its size.
-   */
-  .text_dummy (NOLOAD):
-  {
-    /* Start at the same alignement constraint than .text */
-    . = ALIGN(ALIGNOF(.text));
-    /* Create an empty gap as big as .text section */
-    . = . + SIZEOF(.text);
-    /* Prepare the alignement of the section above. Few bytes (0x20) must be
-     * added for the mapping header. */
-    . = ALIGN(0x10000) + 0x20;
-  } > REGION_RODATA
-
-  .rodata : ALIGN(4)
+  .rodata :
   {
     _srodata = .;
+    *(EXCLUDE_FILE (*libriscv-*.rlib:riscv.*) .rodata);
+    *(EXCLUDE_FILE (*libriscv-*.rlib:riscv.*) .rodata.*);
+    *(EXCLUDE_FILE (*libriscv_rt-*.rlib:riscv-rt.*) .rodata);
+    *(EXCLUDE_FILE (*libriscv_rt-*.rlib:riscv-rt.*) .rodata.*);
     *(.srodata .srodata.*);
     *(.rodata .rodata.*);
 
@@ -92,64 +58,40 @@ SECTIONS
        section will have the correct alignment. */
     . = ALIGN(4);
     _erodata = .;
-  } > REGION_RODATA
+  } > REGION_RODATA AT>ROM
 
-  .rwtext : ALIGN(4) {
-    _irwtext = LOADADDR(.rwtext);
+  .rwtext :
+  {
     _srwtext = .;
+    /* Put reset handler first in .rwtext section so it ends up as the entry */
+    /* point of the program. */
+    KEEP(*(.init));
+    KEEP(*(.init.rust));
+    . = ALIGN(4);
+    KEEP(*(.trap));
+    KEEP(*(.trap.rust));
+
+    *libriscv-*.rlib:riscv.*(.literal .text .literal.* .text.*);
+    *libriscv_rt-*.rlib:riscv-rt.*(.literal .text .literal.* .text.*);
     *(.rwtext);
-
-    *(.iram1)
-    *(.iram1.*)
-
-    *(.wifi0iram .wifi0iram.*)
-    *(.wifirxiram .wifirxiram.*)
-    *(.wifislpiram .wifislpiram.*)
-    *(.wifislprxiram .wifislprxiram.*)
-
     . = ALIGN(4);
     _erwtext = .;
-  } > REGION_RWTEXT
+  } > REGION_RWTEXT AT>ROM
 
-  /* similar as text_dummy */
-  .ram_dummy (NOLOAD) : {
-    . = ALIGN(ALIGNOF(.rwtext));
-    . = . + SIZEOF(.rwtext);
-  } > REGION_DATA
-
-  .data : ALIGN(8)
+  .rwtext.dummy (NOLOAD):
   {
-    _sidata = LOADADDR(.data);
-    _sdata = .;
-    /* Must be called __global_pointer$ for linker relaxations to work. */
-    PROVIDE(__global_pointer$ = . + 0x800);
-    *(.sdata .sdata.* .sdata2 .sdata2.*);
-    *(.data .data.*);
-    *(.data1)
+    /* This section is required to skip .rwtext area because REGION_RWTEXT
+     * and REGION_BSS reflect the same address space on different buses.
+     */
 
-    . = ALIGN(8);
-    _edata = .;
-  } > REGION_DATA
+    . = ORIGIN(REGION_BSS) + _erwtext - _srwtext;
+  } > REGION_BSS
 
   .bss (NOLOAD) :
   {
-    . = ALIGN(8);
     _sbss = .;
-    *(.dynsbss)
-    *(.sbss)
-    *(.sbss.*)
-    *(.gnu.linkonce.sb.*)
-    *(.scommon)
-    *(.sbss2)
-    *(.sbss2.*)
-    *(.gnu.linkonce.sb2.*)
-    *(.dynbss)
     *(.sbss .sbss.* .bss .bss.*);
-    *(.share.mem)
-    *(.gnu.linkonce.b.*)
-    *(COMMON)
-
-    . = ALIGN(8);
+    . = ALIGN(4);
     _ebss = .;
   } > REGION_BSS
 
@@ -166,7 +108,6 @@ SECTIONS
   .heap (NOLOAD) :
   {
     _sheap = .;
-    _heap_start = .;
     . += _heap_size;
     . = ALIGN(4);
     _eheap = .;
@@ -180,32 +121,96 @@ SECTIONS
     _sstack = .;
   } > REGION_STACK
 
-  .rtc_fast.text : ALIGN(4) {
-    *(.rtc_fast.literal .rtc_fast.text .rtc_fast.literal.* .rtc_fast.text.*)
-  } > REGION_RTC_FAST AT > REGION_RODATA
+  .data :
+  {
+    _sdata = .;
+    /* Must be called __global_pointer$ for linker relaxations to work. */
+    PROVIDE(__global_pointer$ = . + 0x800);
+    *(.sdata .sdata.* .sdata2 .sdata2.*);
+    *(.data .data.*);
+    *libriscv-*.rlib:riscv.*(.rodata .rodata.*);
+    *libriscv_rt-*.rlib:riscv-rt.*(.rodata .rodata.*);
+    . = ALIGN(4);
+    _edata = .;
+  } > REGION_DATA AT>ROM
 
-  .rtc_fast.data : ALIGN(4) 
+  .rtc_fast.text :
+  {
+    _srtc_fast_text = .;
+    *(.rtc_fast.literal .rtc_fast.text .rtc_fast.literal.* .rtc_fast.text.*)
+    . = ALIGN(4);
+    _ertc_fast_text = .;
+  } > REGION_RTC_FAST AT>ROM
+
+  .rtc_fast.data :
   {
     _rtc_fast_data_start = ABSOLUTE(.);
     *(.rtc_fast.data .rtc_fast.data.*)
+    . = ALIGN(4);
     _rtc_fast_data_end = ABSOLUTE(.);
-  } > REGION_RTC_FAST AT > REGION_RODATA
+  } > REGION_RTC_FAST AT>ROM
 
- .rtc_fast.bss (NOLOAD) : ALIGN(4) 
+ .rtc_fast.bss (NOLOAD) : ALIGN(4)
   {
     _rtc_fast_bss_start = ABSOLUTE(.);
     *(.rtc_fast.bss .rtc_fast.bss.*)
+    . = ALIGN(4);
     _rtc_fast_bss_end = ABSOLUTE(.);
   } > REGION_RTC_FAST
 
- .rtc_fast.noinit (NOLOAD) : ALIGN(4) 
+ .rtc_fast.noinit (NOLOAD) : ALIGN(4)
   {
     *(.rtc_fast.noinit .rtc_fast.noinit.*)
   } > REGION_RTC_FAST
 
+  /* The alignment of the "text" output section is forced to
+   * 0x00010000 (64KB) to ensure that it will be allocated at the beginning
+   * of the next available Flash block.
+   * This is required to meet the following constraint from the external
+   * flash MMU:
+   *    VMA % 64KB == LMA % 64KB
+   * i.e. the lower 16 bits of both the virtual address (address seen by the
+   * CPU) and the load address (physical address of the external flash) must
+   * be equal.
+   */
+
+  .text.dummy (NOLOAD) : ALIGN(0x10000)
+  {
+    /* This section is required to skip .rodata area because REGION_TEXT
+     * and REGION_RODATA reflect the same address space on different buses.
+     */
+
+    . += SIZEOF(.rodata);
+  } > REGION_TEXT
+
+  .text : ALIGN(0x10000)
+  {
+    _stext = .;
+    *(EXCLUDE_FILE (*libriscv-*.rlib:riscv.*) .text)
+    *(EXCLUDE_FILE (*libriscv-*.rlib:riscv.*) .text.*)
+    *(EXCLUDE_FILE (*libriscv_rt-*.rlib:riscv-rt.*) .text)
+    *(EXCLUDE_FILE (*libriscv_rt-*.rlib:riscv-rt.*) .text.*)
+    *(.text .text.*);
+    _etext = .;
+  } > REGION_TEXT AT>ROM
+
+  /* fake output .got section */
+  /* Dynamic relocations are unsupported. This section is only used to detect
+     relocatable code in the input files and raise an error if relocatable code
+     is found */
+  .got (INFO) :
+  {
+    KEEP(*(.got .got.*));
+  }
+
   .eh_frame (INFO) : { KEEP(*(.eh_frame)) }
   .eh_frame_hdr (INFO) : { *(.eh_frame_hdr) }
 }
+
+PROVIDE(_sidata = _erodata + 8);
+PROVIDE(_irwtext = ORIGIN(DROM) + _text_size + _rodata_size + _data_size);
+PROVIDE(_irtc_fast_text = ORIGIN(DROM) + _text_size + _rodata_size + _data_size + _rwtext_size);
+PROVIDE(_irtc_fast_data = ORIGIN(DROM) + _text_size + _rodata_size + _data_size + _rwtext_size + _fast_text_size);
 
 /* Do not exceed this mark in the error messages above                                    | */
 ASSERT(ORIGIN(REGION_TEXT) % 4 == 0, "
