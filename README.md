@@ -1,6 +1,6 @@
 ## ESP32-c3 Scaffold
 
-This is a simple repo that uses the [esp-hal](https://github.com/esp-rs/esp-hal) and provides a minimal rust project setup for the ESP32-C3 RISC-V platform. Ideally you can clone this and immediately be able to upload blinky to your ESP32-C3 board.
+This is a simple repo that uses the [esp-hal](https://github.com/esp-rs/esp-hal) and provides a minimal rust project setup for the ESP32-C3 RISC-V platform. Ideally you can clone this and immediately be able to upload code to your ESP32-C3 board.
 
 The scaffold uses the [espflash](https://github.com/esp-rs/espflash) utility to upload the code to the board over USB. This can be installed easily using the `cargo install espflash` command.
 
